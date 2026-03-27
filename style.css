@@ -882,6 +882,14 @@ textarea.form-input {
         text-align: center;
     }
 
+    .contact-form {
+        text-align: center;
+    }
+
+    .contact-form .form-group {
+        text-align: left;
+    }
+
     .contact-details {
         align-items: center;
     }
