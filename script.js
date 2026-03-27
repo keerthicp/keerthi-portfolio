@@ -26,14 +26,25 @@ navLinks.forEach(link => {
     });
 });
 
-// ===== Navbar Background on Scroll =====
+// ===== Navbar Background & Scroll Up =====
 const navbar = document.getElementById('navbar');
+const scrollUp = document.getElementById('scrollUp');
 
 window.addEventListener('scroll', () => {
+    // Navbar background
     if (window.scrollY > 50) {
         navbar.classList.add('scrolled');
     } else {
         navbar.classList.remove('scrolled');
+    }
+
+    // Scroll up button visibility
+    if (scrollUp) {
+        if (window.scrollY >= 350) {
+            scrollUp.classList.add('show-scroll');
+        } else {
+            scrollUp.classList.remove('show-scroll');
+        }
     }
 });
 
@@ -318,3 +329,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 100);
     }
 });
+
+// ===== Dark Theme Toggle =====
+const themeButton = document.getElementById('theme-button');
+const themeIcon = document.getElementById('theme-icon');
+const body = document.body;
+
+// Check if user previously saved a theme preference
+const currentTheme = localStorage.getItem('portfolio-theme');
+if (currentTheme) {
+    if (currentTheme === 'dark') {
+        body.classList.add('dark-theme');
+        if (themeIcon) {
+            themeIcon.classList.remove('ri-moon-line');
+            themeIcon.classList.add('ri-sun-line');
+        }
+    }
+}
+
+// Toggle theme on button click
+if (themeButton) {
+    themeButton.addEventListener('click', () => {
+        body.classList.toggle('dark-theme');
+        let theme = 'light';
+
+        if (body.classList.contains('dark-theme')) {
+            theme = 'dark';
+            themeIcon.classList.remove('ri-moon-line');
+            themeIcon.classList.add('ri-sun-line');
+        } else {
+            themeIcon.classList.remove('ri-sun-line');
+            themeIcon.classList.add('ri-moon-line');
+        }
+
+        // Save preference to localStorage
+        localStorage.setItem('portfolio-theme', theme);
+    });
+}
