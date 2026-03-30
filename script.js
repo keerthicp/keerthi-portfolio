@@ -330,6 +330,208 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// ===== Neural Network Background Animation =====
+(function () {
+    const canvas = document.getElementById('neuralCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // ---- Config ----
+    const NODE_COUNT = 55;
+    const CONNECTION_DISTANCE = 160;
+    const NODE_RADIUS_MIN = 1.5;
+    const NODE_RADIUS_MAX = 4;
+    const SPEED = 0.45;
+    const MOUSE_ATTRACT_DIST = 200;
+    const MOUSE_ATTRACT_FORCE = 0.04;
+    const HUB_COUNT = 6; // larger "intelligence" hub nodes
+
+    let mouse = { x: -9999, y: -9999 };
+    let isDark = document.body.classList.contains('dark-theme');
+    let nodes = [];
+    let pulses = []; // ripple pulse animations on hubs
+    let animId;
+
+    // ---- Colour helpers ----
+    function getPrimaryRGB() {
+        // Always use the brand purple
+        return { r: 108, g: 99, b: 255 };
+    }
+
+    function getColors() {
+        const c = getPrimaryRGB();
+        const nodeAlpha    = isDark ? 0.75 : 0.55;
+        const lineAlpha    = isDark ? 0.18 : 0.13;
+        const pulseAlpha   = isDark ? 0.30 : 0.18;
+        const hubAlpha     = isDark ? 0.90 : 0.70;
+        return { c, nodeAlpha, lineAlpha, pulseAlpha, hubAlpha };
+    }
+
+    // ---- Build nodes ----
+    function createNodes() {
+        nodes = [];
+        pulses = [];
+        const w = canvas.width;
+        const h = canvas.height;
+
+        for (let i = 0; i < NODE_COUNT; i++) {
+            const isHub = i < HUB_COUNT;
+            nodes.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                vx: (Math.random() - 0.5) * SPEED,
+                vy: (Math.random() - 0.5) * SPEED,
+                r: isHub
+                    ? NODE_RADIUS_MAX * 1.8 + Math.random() * 2
+                    : NODE_RADIUS_MIN + Math.random() * (NODE_RADIUS_MAX - NODE_RADIUS_MIN),
+                isHub,
+                pulseTimer: isHub ? Math.random() * 120 : 0,
+            });
+        }
+    }
+
+    // ---- Resize canvas to match hero section ----
+    function resize() {
+        const hero = document.getElementById('home');
+        canvas.width = hero ? hero.offsetWidth : window.innerWidth;
+        canvas.height = hero ? hero.offsetHeight : window.innerHeight;
+        createNodes();
+    }
+
+    // ---- Draw a single frame ----
+    function draw() {
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const colors = getColors();
+        const { c } = colors;
+
+        // --- Update nodes ---
+        nodes.forEach(node => {
+            // Mouse attraction
+            const dx = mouse.x - node.x;
+            const dy = mouse.y - node.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < MOUSE_ATTRACT_DIST && dist > 0) {
+                node.vx += (dx / dist) * MOUSE_ATTRACT_FORCE;
+                node.vy += (dy / dist) * MOUSE_ATTRACT_FORCE;
+            }
+
+            // Dampen velocity (keep it from accelerating infinitely)
+            node.vx *= 0.995;
+            node.vy *= 0.995;
+            // Clamp speed
+            const speed = Math.sqrt(node.vx ** 2 + node.vy ** 2);
+            if (speed > SPEED * 2) {
+                node.vx = (node.vx / speed) * SPEED * 2;
+                node.vy = (node.vy / speed) * SPEED * 2;
+            }
+
+            node.x += node.vx;
+            node.y += node.vy;
+
+            // Bounce off walls
+            if (node.x < node.r)     { node.x = node.r;     node.vx *= -1; }
+            if (node.x > w - node.r) { node.x = w - node.r; node.vx *= -1; }
+            if (node.y < node.r)     { node.y = node.r;     node.vy *= -1; }
+            if (node.y > h - node.r) { node.y = h - node.r; node.vy *= -1; }
+
+            // Hub pulse trigger
+            if (node.isHub) {
+                node.pulseTimer--;
+                if (node.pulseTimer <= 0) {
+                    pulses.push({ x: node.x, y: node.y, r: node.r, maxR: 60 + Math.random() * 40, life: 1 });
+                    node.pulseTimer = 90 + Math.random() * 90;
+                }
+            }
+        });
+
+        // --- Draw connections ---
+        for (let i = 0; i < nodes.length; i++) {
+            for (let j = i + 1; j < nodes.length; j++) {
+                const a = nodes[i], b = nodes[j];
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < CONNECTION_DISTANCE) {
+                    const fade = 1 - dist / CONNECTION_DISTANCE;
+                    const alpha = colors.lineAlpha * fade * (a.isHub || b.isHub ? 2.5 : 1);
+                    ctx.beginPath();
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                    ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${Math.min(alpha, 0.55)})`;
+                    ctx.lineWidth = a.isHub || b.isHub ? 1.2 : 0.7;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // --- Draw pulses (ripple rings from hubs) ---
+        pulses = pulses.filter(p => p.life > 0);
+        pulses.forEach(p => {
+            p.r += 1.5;
+            p.life -= 0.016;
+            const alpha = colors.pulseAlpha * p.life;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${alpha})`;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        });
+
+        // --- Draw nodes ---
+        nodes.forEach(node => {
+            const alpha = node.isHub ? colors.hubAlpha : colors.nodeAlpha;
+
+            // Outer glow for hubs
+            if (node.isHub) {
+                const grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.r * 4);
+                grad.addColorStop(0, `rgba(${c.r},${c.g},${c.b},${alpha * 0.4})`);
+                grad.addColorStop(1, `rgba(${c.r},${c.g},${c.b},0)`);
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, node.r * 4, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+            }
+
+            // Node dot
+            const grad2 = ctx.createRadialGradient(node.x - node.r * 0.3, node.y - node.r * 0.3, 0, node.x, node.y, node.r);
+            grad2.addColorStop(0, `rgba(${c.r},${c.g},${c.b},${alpha})`);
+            grad2.addColorStop(1, `rgba(${c.r},${c.g},${c.b},${alpha * 0.6})`);
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
+            ctx.fillStyle = grad2;
+            ctx.fill();
+        });
+
+        animId = requestAnimationFrame(draw);
+    }
+
+    // ---- Mouse tracking (relative to hero) ----
+    document.getElementById('home').addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+    });
+    document.getElementById('home').addEventListener('mouseleave', () => {
+        mouse.x = -9999;
+        mouse.y = -9999;
+    });
+
+    // ---- React to dark/light mode toggle ----
+    const themeObserver = new MutationObserver(() => {
+        isDark = document.body.classList.contains('dark-theme');
+    });
+    themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+    // ---- Init ----
+    resize();
+    window.addEventListener('resize', resize);
+    draw();
+})();
+
 // ===== Dark Theme Toggle =====
 const themeButton = document.getElementById('theme-button');
 const themeIcon = document.getElementById('theme-icon');
